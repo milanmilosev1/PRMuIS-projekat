@@ -1,7 +1,7 @@
 .vs
 DERMS\bin
-DERMS\obj
+DERMS\obj\Debug
 DERMS.Client\bin
-DERMS.Client\obj
+DERMS.Client\obj\Debug
 DERMS.Server\bin
-DERMS.Server\obj
+DERMS.Server\obj\Debug
