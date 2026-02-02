@@ -11,7 +11,7 @@ namespace Client
     {
         public void WeatherSensor()
         {
-            Socket sensorSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            var sensorSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             Console.WriteLine("=== SENZOR VREMENSKIH PRILIKA ===");
             Console.Write("Unesite IP adresu generatora: ");
             string ip = Console.ReadLine();
@@ -22,7 +22,6 @@ namespace Client
                
                 IPEndPoint endPoint = new IPEndPoint(IPAddress.Parse(ip), port);
                 sensorSocket.Connect(endPoint);
-
         
                 sensorSocket.Blocking = false;
                 Console.WriteLine("Veza uspostavljena. Utičnica je u neblokirajućem režimu.");
@@ -43,8 +42,7 @@ namespace Client
                 {
                     string poruka = "";
 
-                    
-                    if (tip.Contains("SP"))
+                    if (tip == "SP")
                     {
                         int sat = DateTime.Now.Hour;
                         double ins = 1050; // Osuncanost za period 12-14h 
@@ -63,7 +61,6 @@ namespace Client
                             temp -= razlika * 4;
                         }
 
-
                         double tCell;
                         if(temp >= 25)
                         {
@@ -74,16 +71,19 @@ namespace Client
                             tCell = temp + 0.025 * ins;
                         }
                         poruka = ins.ToString() + "," + tCell.ToString();
-
                     }
                     
-                    else if (tip.Contains("VG"))
+                    else if (tip == "VG")
                     {
                         Random r = new Random();
                         double brzinaVetra = r.NextDouble() * 30.0; // Opseg 0.0 - 30.0 
                         poruka = brzinaVetra.ToString();
                     }
-
+                    else
+                    {
+                        Console.WriteLine("Neuspesan tip.");
+                        return;
+                    }
                   
                     List<Socket> checkWrite = new List<Socket> { sensorSocket };
                     Socket.Select(null, checkWrite, null, 1000000);
@@ -94,9 +94,6 @@ namespace Client
                         sensorSocket.Send(data); 
                         Console.WriteLine("Poslato generatoru: " + poruka);
                     }
-
-                    // Pauza od 5 sekundi između ocitavanja
-                    Thread.Sleep(5000);
                 }
             }
             catch (Exception ex)
@@ -113,10 +110,5 @@ namespace Client
                 }
             }
         }
-
-
     }
-
-    
-
 }
