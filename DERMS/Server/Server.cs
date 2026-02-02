@@ -1,4 +1,4 @@
-﻿using DERMS.Modeli;
+﻿using Modeli;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -12,6 +12,7 @@ namespace Server
         public int Port { get; set; }
         public IList<ClientHandler> Clients { get; set; }
         public IList<Proizvodnja> ProductionData { get; set; }
+
         private readonly IPEndPoint _localEndPoint;
 
         public Server(IPAddress ipAddress, int port)
@@ -31,14 +32,31 @@ namespace Server
             serverSocket.Listen(10);
 
             Console.WriteLine($"Server pokrenut na {IpAddress}:{Port}");
-            AcceptClients();
+            AcceptClients(serverSocket);
         }
 
-        private void AcceptClients()
+        private void AcceptClients(Socket serverSocket)
         {
-            foreach(var client in Clients)
+            var clientSocket = serverSocket.Accept();
+            var handler = new ClientHandler(clientSocket, this);
+            AddClient(handler);
+
+            clientSocket.Blocking = false;
+
+            while (true)
             {
-                client.Handle();
+                try
+                {
+                    if(clientSocket.Poll(1000 * 1000, SelectMode.SelectRead))
+                    {
+                        handler.Handle();
+                    }
+                }
+                catch (SocketException ex)
+                {
+                    Console.WriteLine($"Doslo je do greske {ex}");
+                    break;
+                }
             }
         }
 
@@ -46,7 +64,7 @@ namespace Server
         {
             var prod = new Proizvodnja
             {
-                Id = generatorId + "",
+                Id = generatorId + "-" + RandomStringGenerator.GenerateRandomString(5),
                 ActivePower = activePower,
                 ReactivePower = reactivePower
             };

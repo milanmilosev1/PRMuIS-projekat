@@ -18,13 +18,15 @@ namespace Server
 
         public void Handle()
         {
+            _server.AddClient(this);
+            var buffer = new byte[1024];
+
             try
             {
-                _server.AddClient(this);
-                byte[] buffer = new byte[1024];
                 int bytesRead = _clientSocket.Receive(buffer);
-                var generatorId = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                if (bytesRead == 0) return;
 
+                var generatorId = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                 Console.WriteLine($"Generator {generatorId} se registrovao");
 
                 while (_isRunning)
@@ -32,20 +34,20 @@ namespace Server
                     bytesRead = _clientSocket.Receive(buffer);
                     if (bytesRead == 0) break;
 
-                    string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    var data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
 
                     var parts = data.Split(';');
-                    if(parts.Length == 2)
+                    if (parts.Length == 2 &&
+                        double.TryParse(parts[0], out var activePower) &&
+                        double.TryParse(parts[1], out var reactivePower))
                     {
-                        var activePower = double.Parse(parts[0]);
-                        var reactivePower = double.Parse(parts[1]);
                         _server.AddProductionData(generatorId, activePower, reactivePower);
                     }
                 }
             }
-            catch (SocketException ex)
+            catch (SocketException e)
             {
-                Console.WriteLine("Socket error: " + ex.SocketErrorCode);
+                Console.WriteLine($"Greska: Socket code {e.SocketErrorCode}");
             }
             finally
             {
