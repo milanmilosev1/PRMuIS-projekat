@@ -20,7 +20,7 @@ namespace Server
         {
             try
             {
-                _server.Clients.Add(this);
+                _server.AddClient(this);
                 byte[] buffer = new byte[1024];
                 int bytesRead = _clientSocket.Receive(buffer);
                 var generatorId = Encoding.UTF8.GetString(buffer, 0, bytesRead);
