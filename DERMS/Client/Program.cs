@@ -1,10 +1,4 @@
-﻿using System;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Threading;
-
-namespace Client
+﻿namespace Client
 {
     internal class Program
     {
@@ -17,7 +11,4 @@ namespace Client
 
         }
     }
-      
-         
-       
 }

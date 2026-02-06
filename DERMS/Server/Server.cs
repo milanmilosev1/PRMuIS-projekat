@@ -1,5 +1,7 @@
-﻿using System;
+﻿using Modeli;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
@@ -7,46 +9,118 @@ namespace Server
 {
     internal class Server
     {
-        public IPAddress IpAddress { get; set; }
-        public int Port { get; set; }
-        public IList<ClientHandler> Clients { get; set; }
+        public IPAddress IpAddress { get; }
+        public int Port { get; }
+        public IList<ClientHandler> Clients { get; }
+        public IList<Proizvodnja> ProductionData { get; }
+
+        private readonly Socket _serverSocket;
+        private readonly IPEndPoint _localEndPoint;
 
         public Server(IPAddress ipAddress, int port)
         {
             IpAddress = ipAddress;
-            Port = port;       
+            Port = port;
+
             Clients = new List<ClientHandler>();
-        }
-        
-        public void Start()
-        {
-            var serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            IPEndPoint localEndPoint = new IPEndPoint(IpAddress, Port);
-            serverSocket.Bind(localEndPoint);
-            serverSocket.Listen(10);
+            ProductionData = new List<Proizvodnja>();
+
+            _localEndPoint = new IPEndPoint(ipAddress, port);
+
+            _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _serverSocket.Blocking = false;
+            _serverSocket.Bind(_localEndPoint);
+            _serverSocket.Listen(10);
 
             Console.WriteLine($"Server pokrenut na {IpAddress}:{Port}");
-            AcceptClients();
+        }
+
+        public void Run()
+        {
+            while (true)
+            {
+                AcceptClients();
+                PollClients();
+            }
         }
 
         private void AcceptClients()
         {
-            foreach(var client in Clients)
+            if (_serverSocket.Poll(1000 * 1000, SelectMode.SelectRead))
             {
-                client.Handle();
+                try
+                {
+                    var clientSocket = _serverSocket.Accept();
+                    clientSocket.Blocking = false;
+
+                    var handler = new ClientHandler(clientSocket);
+                    Clients.Add(handler);
+
+                    Console.WriteLine("Novi generator povezan");
+                }
+                catch (SocketException)
+                {
+                    
+                }
             }
         }
 
-        public void AddProductionData(string generatorId, double activePower, double reactivePower)
+        private void PollClients()
         {
-            //TODO: Implementacija za cuvanje podataka
-            // kontam da smestim u ovaj DERMS projekat neki kao persistence layer al nzm videcemo sve
-            throw new NotImplementedException();
+            foreach (var client in Clients.ToList())
+            {
+                try
+                {
+                    if (client.Socket.Poll(1000 * 1000, SelectMode.SelectRead))
+                    {
+                        var message = client.Receive();
+
+                        if (message == null)
+                        {
+                            Clients.Remove(client);
+                            Console.WriteLine("Generator diskonektovan");
+                            continue;
+                        }
+
+                        ProcessMessage(client, message);
+                    }
+                }
+                catch (SocketException)
+                {
+                    Clients.Remove(client);
+                }
+            }
         }
 
-        public bool RemoveClient(ClientHandler clientHandler)
+        private void ProcessMessage(ClientHandler client, string message)
         {
-            return Clients.Remove(clientHandler);
+            if (!client.IsRegistered)
+            {
+                client.GeneratorId = message;
+                client.IsRegistered = true;
+
+                Console.WriteLine($"Generator {client.GeneratorId} se registrovao");
+                return;
+            }
+
+            var parts = message.Split(';');
+            if (parts.Length == 2 &&
+                double.TryParse(parts[0], out double activePower) &&
+                double.TryParse(parts[1], out double reactivePower))
+            {
+                var prod = new Proizvodnja
+                {
+                    Id = client.GeneratorId,
+                    ActivePower = activePower,
+                    ReactivePower = reactivePower
+                };
+
+                ProductionData.Add(prod);
+
+                Console.WriteLine(
+                    $"[{DateTime.Now:HH:mm:ss}] {prod.Id} | P={activePower:F2} kW | Q={reactivePower:F2} kVAr"
+                );
+            }
         }
     }
 }

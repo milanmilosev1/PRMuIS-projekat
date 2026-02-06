@@ -1,15 +1,14 @@
-﻿using System;
+﻿using System.Net;
 
 namespace Server
 {
     internal class Program
     {
-
-
-
         static void Main(string[] args)
         {
-            Console.WriteLine("hello");
+            IPAddress ipAddress = IPAddress.Parse("192.168.1.9");
+            var server = new Server(ipAddress, 50001);
+            server.Run();
         }
     }
 }
