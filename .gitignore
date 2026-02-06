@@ -7,3 +7,8 @@ DERMS/Client/obj
 DERMS/Server/bin
 DERMS/Server/obj
 /DERMS/DERMS/obj/Debug
+/DERMS/Client/.vs
+/DERMS/DERMS/.vs
+/DERMS/DERMS/bin/Debug
+/DERMS/Server/.vs
+/DERMS/DERMS.slnLaunch.user
