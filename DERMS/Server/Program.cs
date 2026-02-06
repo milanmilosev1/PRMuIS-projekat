@@ -1,4 +1,4 @@
-﻿using System;
+﻿using System.Net;
 
 namespace Server
 {
@@ -6,8 +6,9 @@ namespace Server
     {
         static void Main(string[] args)
         {
-            //Server server = new Server();
-            Console.WriteLine("hello");
+            IPAddress ipAddress = IPAddress.Parse("192.168.1.9");
+            var server = new Server(ipAddress, 50001);
+            server.Run();
         }
     }
 }

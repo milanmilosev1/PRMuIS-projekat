@@ -1,6 +1,7 @@
 ﻿using Modeli;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
@@ -8,78 +9,118 @@ namespace Server
 {
     internal class Server
     {
-        public IPAddress IpAddress { get; set; }
-        public int Port { get; set; }
-        public IList<ClientHandler> Clients { get; set; }
-        public IList<Proizvodnja> ProductionData { get; set; }
+        public IPAddress IpAddress { get; }
+        public int Port { get; }
+        public IList<ClientHandler> Clients { get; }
+        public IList<Proizvodnja> ProductionData { get; }
 
+        private readonly Socket _serverSocket;
         private readonly IPEndPoint _localEndPoint;
 
         public Server(IPAddress ipAddress, int port)
         {
             IpAddress = ipAddress;
-            Port = port;       
+            Port = port;
+
             Clients = new List<ClientHandler>();
             ProductionData = new List<Proizvodnja>();
+
             _localEndPoint = new IPEndPoint(ipAddress, port);
-            Start();
-        }
-        
-        public void Start()
-        {
-            var serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            serverSocket.Bind(_localEndPoint);
-            serverSocket.Listen(10);
+
+            _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            _serverSocket.Blocking = false;
+            _serverSocket.Bind(_localEndPoint);
+            _serverSocket.Listen(10);
 
             Console.WriteLine($"Server pokrenut na {IpAddress}:{Port}");
-            AcceptClients(serverSocket);
         }
 
-        private void AcceptClients(Socket serverSocket)
+        public void Run()
         {
-            var clientSocket = serverSocket.Accept();
-            var handler = new ClientHandler(clientSocket, this);
-            AddClient(handler);
-
-            clientSocket.Blocking = false;
-
             while (true)
+            {
+                AcceptClients();
+                PollClients();
+            }
+        }
+
+        private void AcceptClients()
+        {
+            if (_serverSocket.Poll(1000 * 1000, SelectMode.SelectRead))
             {
                 try
                 {
-                    if(clientSocket.Poll(1000 * 1000, SelectMode.SelectRead))
-                    {
-                        handler.Handle();
-                    }
+                    var clientSocket = _serverSocket.Accept();
+                    clientSocket.Blocking = false;
+
+                    var handler = new ClientHandler(clientSocket);
+                    Clients.Add(handler);
+
+                    Console.WriteLine("Novi generator povezan");
                 }
-                catch (SocketException ex)
+                catch (SocketException)
                 {
-                    Console.WriteLine($"Doslo je do greske {ex}");
-                    break;
+                    
                 }
             }
         }
 
-        public void AddProductionData(string generatorId, double activePower, double reactivePower)
+        private void PollClients()
         {
-            var prod = new Proizvodnja
+            foreach (var client in Clients.ToList())
             {
-                Id = generatorId + "-" + RandomStringGenerator.GenerateRandomString(5),
-                ActivePower = activePower,
-                ReactivePower = reactivePower
-            };
+                try
+                {
+                    if (client.Socket.Poll(1000 * 1000, SelectMode.SelectRead))
+                    {
+                        var message = client.Receive();
 
-            ProductionData.Add(prod);
+                        if (message == null)
+                        {
+                            Clients.Remove(client);
+                            Console.WriteLine("Generator diskonektovan");
+                            continue;
+                        }
+
+                        ProcessMessage(client, message);
+                    }
+                }
+                catch (SocketException)
+                {
+                    Clients.Remove(client);
+                }
+            }
         }
 
-        public bool RemoveClient(ClientHandler clientHandler)
+        private void ProcessMessage(ClientHandler client, string message)
         {
-            return Clients.Remove(clientHandler);
-        }
+            if (!client.IsRegistered)
+            {
+                client.GeneratorId = message;
+                client.IsRegistered = true;
 
-        public void AddClient(ClientHandler clientHandler)
-        {
-            Clients.Add(clientHandler);
+                Console.WriteLine($"Generator {client.GeneratorId} se registrovao");
+                return;
+            }
+
+            var parts = message.Split(';');
+            if (parts.Length == 2 &&
+                double.TryParse(parts[0], out double activePower) &&
+                double.TryParse(parts[1], out double reactivePower))
+            {
+                var prod = new Proizvodnja
+                {
+                    Id = client.GeneratorId,
+                    ActivePower = activePower,
+                    ReactivePower = reactivePower
+                };
+
+                ProductionData.Add(prod);
+
+                Console.WriteLine(
+                    $"[{DateTime.Now:HH:mm:ss}] {prod.Id} | P={activePower:F2} kW | Q={reactivePower:F2} kVAr"
+                );
+            }
         }
     }
 }
