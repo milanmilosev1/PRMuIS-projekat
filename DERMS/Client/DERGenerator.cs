@@ -1,8 +1,10 @@
 ﻿using DERMS;
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
 
 namespace Client
 {
@@ -57,6 +59,7 @@ namespace Client
                 TcpClient dispecerClient = new TcpClient("127.0.0.1", 8000);
                 Console.WriteLine("\n Uspesno povezan sa dispecerskim serverom.");
 
+
                
                 string generatorId = tip.ToString() + "_" + Guid.NewGuid().ToString().Substring(0, 4);
                 byte[] idBytes = Encoding.UTF8.GetBytes(generatorId);
@@ -81,9 +84,59 @@ namespace Client
 
                 Console.WriteLine("Klijent je spreman. Cekam senzor...");
 
-               
+                Socket sensorSocket = tcpSensor.AcceptSocket(); 
+                sensorSocket.Blocking = false; 
+                Console.WriteLine("Senzor povezan.");
+                byte[] tipZaSenzor = Encoding.UTF8.GetBytes(tip.ToString());
+                sensorSocket.Send(tipZaSenzor);
+                while (true)
+                {
+                    List<Socket> readList = new List<Socket> { sensorSocket };
+                    Socket.Select(readList, null, null, 1000000); 
 
-                Console.ReadLine(); 
+                    if (readList.Count > 0)
+                    {
+                        byte[] buffer = new byte[1024];
+                        int bytesRead = sensorSocket.Receive(buffer); 
+                        if (bytesRead == 0) break;
+
+                        string data = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                        double p = 0;
+                        double q = 0;
+
+                        if (tip == TipGeneratora.SP) // Zadatak 5 
+                        {
+                            string[] delovi = data.Split(',');
+                            double ins = double.Parse(delovi[0]);
+                            double tcell = double.Parse(delovi[1]);
+                            p = nominalnaSnaga * ins * 0.00095 * (1 - 0.005 * (tcell - 25));
+                            q = 0;
+                        }
+                        else if (tip == TipGeneratora.VG) // Zadatak 6
+                        {
+                            double v = double.Parse(data);
+                            if (v < 3.5 || v > 25)
+                            {
+                                p = 0;
+                            }
+                            else if (v >= 3.5 && v < 14)
+                            {
+                                p = (v - 3.5) * 0.035; 
+                            }
+                            else
+                            {
+                                p = nominalnaSnaga; 
+                            }
+                            q = p * 0.05; // Reaktivna je 5% aktivne 
+                        }
+
+                        string slanje = p.ToString() + ";" + q.ToString();
+                        byte[] slanjeBytes = Encoding.UTF8.GetBytes(slanje);
+                        dispecerClient.GetStream().Write(slanjeBytes, 0, slanjeBytes.Length);
+
+                        Console.WriteLine($"Poslato dispeceru: P={p:F2}kW, Q={q:F2}kVAr");
+                    }
+                }
             }
             catch (Exception ex)
             {
