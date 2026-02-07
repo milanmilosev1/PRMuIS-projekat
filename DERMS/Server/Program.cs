@@ -6,7 +6,7 @@ namespace Server
     {
         static void Main(string[] args)
         {
-            IPAddress ipAddress = IPAddress.Parse("192.168.1.9");
+            IPAddress ipAddress = IPAddress.Parse("192.168.56.1");
             var server = new Server(ipAddress, 50001);
             server.Run();
         }

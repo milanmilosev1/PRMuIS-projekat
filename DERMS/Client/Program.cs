@@ -8,7 +8,6 @@
             generator.SimulateGenerator();
             SenzorVremenskihPrilika senzori = new SenzorVremenskihPrilika();
             senzori.WeatherSensor();
-
         }
     }
 }
