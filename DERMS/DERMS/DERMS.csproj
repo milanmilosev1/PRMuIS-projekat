@@ -36,8 +36,17 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Enums\GeneratorType.cs" />
+    <Compile Include="Enums\MessageType.cs" />
+    <Compile Include="Models\ControlCommand.cs" />
+    <Compile Include="Models\GeneratorInfo.cs" />
+    <Compile Include="Models\SolarSensorData.cs" />
+    <Compile Include="Models\WindSensorData.cs" />
+    <Compile Include="Networking\Envelope.cs" />
+    <Compile Include="Networking\NetConfig.cs" />
+    <Compile Include="Networking\Serializer.cs" />
+    <Compile Include="Networking\Safe.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="TipGeneratora.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

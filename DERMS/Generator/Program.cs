@@ -1,12 +1,12 @@
-﻿using DERMS.Server;
+﻿using DERMS.Generator;
 
-namespace Server
+namespace Generator
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            ServerApp.Run();
+            GeneratorApp.Run(args);
         }
     }
 }
