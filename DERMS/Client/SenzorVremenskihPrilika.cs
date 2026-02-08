@@ -23,7 +23,6 @@ namespace Client
                 sensorSocket.Connect(new IPEndPoint(IPAddress.Parse(ip), port));
                 sensorSocket.Blocking = false;
 
-                // Sačekaj tip (SP/VG) od generatora
                 string tip = ReceiveOncePolling(sensorSocket);
                 Console.WriteLine($"Primljen tip: {tip}");
 
@@ -31,7 +30,6 @@ namespace Client
 
                 while (true)
                 {
-                    // šalji ~1x u sekundi bez Thread.Sleep (Select blokira do 1s)
                     var writeList = new List<Socket> { sensorSocket };
                     Socket.Select(null, writeList, null, 1_000_000);
                     if (writeList.Count == 0) continue;
@@ -60,7 +58,6 @@ namespace Client
                         if (temp > 25.0) tCell = 25.0;
                         else tCell = temp + 0.025 * ins;
 
-                        // Važno: InvariantCulture da decimalni separator bude '.' (da Split(',') radi kako treba)
                         poruka =
                             ins.ToString(CultureInfo.InvariantCulture) + "," +
                             tCell.ToString(CultureInfo.InvariantCulture);
