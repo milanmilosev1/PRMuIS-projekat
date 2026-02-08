@@ -1,12 +1,12 @@
-﻿using DERMS.Server;
+﻿using DERMS.Sensor;
 
-namespace Server
+namespace Sensor
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            ServerApp.Run();
+            SensorApp.Run(args);
         }
     }
 }

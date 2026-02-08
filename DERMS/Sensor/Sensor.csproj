@@ -4,10 +4,10 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{B88F39F1-A5E9-4CC1-8670-A181C36A72E3}</ProjectGuid>
+    <ProjectGuid>{A9824C2A-FBC8-4F34-89D1-73549F57361A}</ProjectGuid>
     <OutputType>Exe</OutputType>
-    <RootNamespace>Client</RootNamespace>
-    <AssemblyName>Client</AssemblyName>
+    <RootNamespace>Sensor</RootNamespace>
+    <AssemblyName>Sensor</AssemblyName>
     <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -43,17 +43,16 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="SenzorVremenskihPrilika.cs" />
-    <Compile Include="DERGenerator.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SensorApp.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DERMS\DERMS.csproj">
-      <Project>{B1BC441E-76B6-4AC7-8A87-D8D47AE67B52}</Project>
+      <Project>{b1bc441e-76b6-4ac7-8a87-d8d47ae67b52}</Project>
       <Name>DERMS</Name>
     </ProjectReference>
   </ItemGroup>
