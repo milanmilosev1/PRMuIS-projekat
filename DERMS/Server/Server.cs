@@ -29,8 +29,10 @@ namespace Server
 
             _localEndPoint = new IPEndPoint(ipAddress, port);
 
-            _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            _serverSocket.Blocking = false;
+            _serverSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp)
+            {
+                Blocking = false
+            };
             _serverSocket.Bind(_localEndPoint);
             _serverSocket.Listen(10);
 
@@ -38,7 +40,7 @@ namespace Server
 
             Console.CancelKeyPress += (s, e) =>
             {
-                e.Cancel = true;   // ne ubij proces odmah
+                e.Cancel = true;
                 _running = false;
             };
         }
@@ -47,46 +49,55 @@ namespace Server
         {
             while (_running)
             {
-                // polling model: Select nad server socketom + svim klijentima :contentReference[oaicite:2]{index=2}
-                var readList = new List<Socket> { _serverSocket };
-                readList.AddRange(Clients.Select(c => c.Socket));
-
-                Socket.Select(readList, null, null, 1_000_000); // ~1s
-
-                // 1) Accept novih
-                if (readList.Contains(_serverSocket))
-                    AcceptClient();
-
-                // 2) Obradi klijente koji imaju podatke
-                foreach (var sock in readList.Where(s => s != _serverSocket).ToList())
+                if (_serverSocket.Poll(1000 * 1000, SelectMode.SelectRead)) // 1 sekunda
                 {
-                    var client = Clients.FirstOrDefault(c => c.Socket == sock);
-                    if (client == null) continue;
+                    AcceptClient();
+                }
 
+                foreach (var client in Clients.ToList())
+                {
                     try
                     {
-                        var lines = client.ReceiveLines();
+                        if (client.Socket.Poll(1000, SelectMode.SelectRead)) // 1 ms
+                        {
+                            var lines = client.ReceiveLines();
 
-                        if (lines == null)
+                            if (lines == null)
+                            {
+                                // Konekcija zatvorena
+                                Clients.Remove(client);
+                                Console.WriteLine($"Generator {client.GeneratorId} diskonektovan");
+                                continue;
+                            }
+
+                            foreach (var line in lines)
+                            {
+                                ProcessMessage(client, line);
+                            }
+                        }
+                    }
+                    catch (SocketException ex)
+                    {
+                        if (ex.SocketErrorCode == SocketError.ConnectionReset)
                         {
                             Clients.Remove(client);
-                            Console.WriteLine("Generator diskonektovan");
-                            continue;
+                            try { client.Socket.Close(); } catch { }
+                            Console.WriteLine($"Generator {client.GeneratorId} diskonektovan (reset veze)");
                         }
-
-                        foreach (var line in lines)
-                            ProcessMessage(client, line);
+                        else
+                        {
+                            Console.WriteLine($"Socket greška: {ex.SocketErrorCode}");
+                        }
                     }
-                    catch (SocketException)
+                    catch (Exception ex)
                     {
-                        Clients.Remove(client);
-                        try { client.Socket.Close(); } catch { }
-                        Console.WriteLine("Generator diskonektovan (greska na soketu)");
+                        Console.WriteLine($"Greška pri obradi klijenta: {ex.Message}");
                     }
                 }
             }
 
-            PrintStatistics(); // zad. 9 :contentReference[oaicite:3]{index=3}
+
+            PrintStatistics();
             CloseAll();
         }
 
@@ -100,11 +111,12 @@ namespace Server
                 var handler = new ClientHandler(clientSocket);
                 Clients.Add(handler);
 
-                Console.WriteLine("Novi generator povezan");
+                Console.WriteLine($"Novi generator povezan: {clientSocket.RemoteEndPoint}");
             }
-            catch (SocketException)
+            catch (SocketException ex)
             {
-                // normalno u polling režimu
+                if (ex.SocketErrorCode != SocketError.WouldBlock)
+                    Console.WriteLine($"Greska pri prihvatanju klijenta: {ex.Message}");
             }
         }
 
@@ -119,11 +131,12 @@ namespace Server
                 client.IsRegistered = true;
 
                 Console.WriteLine($"Generator {client.GeneratorId} se registrovao");
+                Console.WriteLine($"Poruka: {message}");
                 return;
             }
 
             var parts = message.Split(';');
-            if (parts.Length != 2) return;
+            if (parts.Length != 3) return;
 
             if (!double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double activePower))
                 return;
@@ -144,18 +157,54 @@ namespace Server
 
         private void PrintStatistics()
         {
-            // Tip je prva 2 karaktera u ID-u (SP_... / VG_...) :contentReference[oaicite:6]{index=6}
-            var sp = ProductionData.Where(p => p.Id != null && p.Id.StartsWith("SP")).ToList();
-            var vg = ProductionData.Where(p => p.Id != null && p.Id.StartsWith("VG")).ToList();
+            Console.WriteLine("\n=== STATISTIKA (pri zaustavljanju servera) ===");
 
-            double avgSp = sp.Count > 0 ? sp.Average(p => p.ActivePower) : 0.0;
-            double avgVg = vg.Count > 0 ? vg.Average(p => p.ActivePower) : 0.0;
-            double totalQ = ProductionData.Sum(p => p.ReactivePower);
+            var solarGroups = ProductionData
+                .Where(p => p.Id != null && p.Id.Length >= 2 && p.Id.Substring(0, 2).ToUpper() == "SP")
+                .GroupBy(p => p.Id)
+                .ToList();
 
-            Console.WriteLine("\n=== STATISTIKA ===");
-            Console.WriteLine($"Prosecna aktivna snaga (SP): {avgSp:F2} kW");
-            Console.WriteLine($"Prosecna aktivna snaga (VG): {avgVg:F2} kW");
-            Console.WriteLine($"Ukupno proizvedena reaktivna snaga: {totalQ:F2} kVAr");
+            var windGroups = ProductionData
+                .Where(p => p.Id != null && p.Id.Length >= 2 && p.Id.Substring(0, 2).ToUpper() == "VG")
+                .GroupBy(p => p.Id)
+                .ToList();
+
+            if (solarGroups.Any())
+            {
+                double totalSolarActive = solarGroups.Sum(g => g.Sum(p => p.ActivePower));
+                double avgSolar = totalSolarActive / solarGroups.Count(g => g.Any());
+                Console.WriteLine($"Prosecna proizvodnja solarnih panela: {avgSolar:F2} kW");
+
+                foreach (var group in solarGroups)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Average(p => p.ActivePower):F2} kW (prosek)");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Nema podataka o solarnim panelima.");
+            }
+
+            if (windGroups.Any())
+            {
+                double totalWindActive = windGroups.Sum(g => g.Sum(p => p.ActivePower));
+                double avgWind = totalWindActive / windGroups.Count(g => g.Any());
+                Console.WriteLine($"Prosecna proizvodnja vetrogeneratora: {avgWind:F2} kW");
+
+                foreach (var group in windGroups)
+                {
+                    Console.WriteLine($"  {group.Key}: {group.Average(p => p.ActivePower):F2} kW (prosek)");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Nema podataka o vetrogeneratorima.");
+            }
+
+            double totalReactive = ProductionData.Sum(p => p.ReactivePower);
+            Console.WriteLine($"Ukupno proizvedena reaktivna snaga: {totalReactive:F2} kVAr");
+
+            Console.WriteLine($"Ukupno primljenih merenja: {ProductionData.Count}");
         }
 
         private void CloseAll()

@@ -18,39 +18,40 @@ namespace Server
         {
             Socket = socket;
         }
-
-        /// <summary>
-        /// Prima bajtove sa TCP stream-a i vraća sve kompletne poruke (linije) koje su stigle.
-        /// Poruke su razdvojene sa '\n'.
-        /// </summary>
         public List<string> ReceiveLines()
         {
-            int bytesRead = Socket.Receive(_buffer);
+            var messages = new List<string>();
 
-            if (bytesRead == 0)
+            try
             {
-                try { Socket.Close(); } catch { }
-                return null; // disconnect
+                while (Socket.Available > 0)
+                {
+                    int bytesRead = Socket.Receive(_buffer, 0, _buffer.Length, SocketFlags.None);
+                    if (bytesRead == 0)
+                    {
+                        return null;
+                    }
+
+                    string data = Encoding.UTF8.GetString(_buffer, 0, bytesRead);
+                    var lines = data.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    foreach (var line in lines)
+                    {
+                        if (!string.IsNullOrWhiteSpace(line))
+                            messages.Add(line.Trim());
+                    }
+                }
+            }
+            catch (SocketException ex)
+            {
+                if (ex.SocketErrorCode == SocketError.WouldBlock)
+                {
+                    return messages;
+                }
+                throw;
             }
 
-            _incoming.Append(Encoding.UTF8.GetString(_buffer, 0, bytesRead));
-
-            var lines = new List<string>();
-
-            while (true)
-            {
-                string all = _incoming.ToString();
-                int nl = all.IndexOf('\n');
-                if (nl < 0) break;
-
-                string line = all.Substring(0, nl).Trim();
-                lines.Add(line);
-
-                _incoming.Clear();
-                _incoming.Append(all.Substring(nl + 1));
-            }
-
-            return lines;
+            return messages;
         }
     }
 }

@@ -1,5 +1,8 @@
-﻿namespace Modeli
+﻿using System;
+
+namespace Modeli
 {
+    [Serializable]
     internal class Proizvodnja
     {
         public string Id { get; set; } = string.Empty;

@@ -10,7 +10,7 @@ namespace Client
 {
     internal sealed class DERGenerator
     {
-        public void SimulateGenerator()
+        public void SimulateGenerator(string ip, int port)
         {
             Console.WriteLine("=== DER GENERATOR KONFIGURACIJA ===");
             Console.WriteLine("1 - Solarni panel (SP)");
@@ -45,15 +45,12 @@ namespace Client
 
             try
             {
-                // TCP konekcija sa dispečerom (serverom)
-                TcpClient dispecerClient = new TcpClient("192.168.56.1", 50001);
-
-                // ID mora prvo da ode (jedna linija)
+                TcpClient dispecerClient = new TcpClient(ip, port);
+                dispecerClient.Connect(IPAddress.Parse(ip), port);
                 string generatorId = tip.ToString() + "_" + Guid.NewGuid().ToString().Substring(0, 4);
                 byte[] idBytes = Encoding.UTF8.GetBytes(generatorId + "\n");
                 dispecerClient.GetStream().Write(idBytes, 0, idBytes.Length);
 
-                // Utičnice (po zadatku): UDP upravljačka + TCP senzorska
                 UdpClient udpControl = new UdpClient(0);
 
                 TcpListener tcpSensor = new TcpListener(IPAddress.Any, 0);
@@ -66,14 +63,12 @@ namespace Client
                 Socket sensorSocket = tcpSensor.AcceptSocket();
                 sensorSocket.Blocking = false;
 
-                // Pošalji tip senzoru (SP ili VG)
                 sensorSocket.Send(Encoding.UTF8.GetBytes(tip.ToString()));
 
                 while (true)
                 {
-                    // polling čitanje senzora
                     List<Socket> readList = new List<Socket> { sensorSocket };
-                    Socket.Select(readList, null, null, 1_000_000);
+                    Socket.Select(readList, null, null, 1000 * 1000);
 
                     if (readList.Count == 0)
                         continue;
@@ -88,21 +83,17 @@ namespace Client
 
                     if (tip == TipGeneratora.SP)
                     {
-                        // INS,Tcell
                         string[] delovi = data.Split(',');
                         double ins = double.Parse(delovi[0], CultureInfo.InvariantCulture);
                         double tcell = double.Parse(delovi[1], CultureInfo.InvariantCulture);
 
-                        // P = Pn * INS * 0.00095 * (1 - 0.005*(Tcell-25)), Q=0 :contentReference[oaicite:7]{index=7}
                         p = nominalnaSnaga * ins * 0.00095 * (1 - 0.005 * (tcell - 25));
                         q = 0.0;
                     }
                     else
                     {
-                        // brzina vetra
                         double v = double.Parse(data, CultureInfo.InvariantCulture);
 
-                        // Po PDF-u: ako v<3.5 ili v>25 => 0; 3.5-14 => (v-3.5)*0.035; >=14 => Pn :contentReference[oaicite:8]{index=8}
                         if (v < 3.5 || v > 25.0) p = 0.0;
                         else if (v < 14.0) p = (v - 3.5) * 0.035;
                         else p = nominalnaSnaga;
@@ -110,7 +101,6 @@ namespace Client
                         q = p * 0.05;
                     }
 
-                    // P;Q ide kao linija (ovo popravlja "NE RADI")
                     string slanje =
                         p.ToString(CultureInfo.InvariantCulture) + ";" +
                         q.ToString(CultureInfo.InvariantCulture) + "\n";
